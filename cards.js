@@ -51,7 +51,7 @@ window.CARDS = [
 ["伝える","Artwork X isn't at the warehouse.","Artwork Xは倉庫にない"],
 ["伝える","I moved Artwork X to the warehouse and checked that nothing else changed.","Artwork Xを倉庫に移し、ほかが変わっていないことを確認した"],
 ["伝える","The first move used an export from 18 minutes earlier, not one taken right before your instruction.","最初の移動は18分前のエクスポートを使っていて、指示の直前のものではなかった"],
-["伝える","All 20 works in Utsunomiya are still available, and no sale is recorded.","Utsunomiyaの20点は全て販売可能で、売上登録はない"],
+["伝える","All 20 works in Utsunomiya are still available, and no sale is recorded.","宇都宮の20点は全て販売可能で、売上登録はない"],
 ["伝える","Don't forget: when updating the system, upload only the artworks that change.","忘れないで。システム更新は変更する作品だけアップロード"],
 ["伝える","Don't worry too much about flashiness. Just add the budget and why each piece suits a gift.","華やかさは気にしすぎず、予算と贈り物に合う理由を足して"],
 ["伝える","There's one more copy of the same piece.","同じ作品がもう1点ある"],
