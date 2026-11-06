@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2937">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="塩野英語">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon.svg">
+<title>塩野英語練習</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;background:#111827;color:#f9fafb;min-height:100vh;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom)}
+header{display:flex;justify-content:space-between;align-items:center;padding:14px 0;font-size:14px;color:#9ca3af}
+select{background:#1f2937;color:#f9fafb;border:1px solid #374151;border-radius:8px;padding:6px 8px}
+.stat b{color:#34d399}
+.card{flex:1;display:flex;flex-direction:column;justify-content:center;gap:20px;text-align:center;padding:12px 4px}
+.tag{font-size:12px;color:#9ca3af}
+.q{font-size:24px;line-height:1.5;font-weight:600}
+.a{font-size:26px;line-height:1.5;color:#fbbf24;font-weight:600;min-height:3em}
+button{font-size:18px;border:0;border-radius:14px;padding:16px;font-weight:600;color:#fff;cursor:pointer}
+.row{display:flex;gap:10px;margin:8px 0}
+.row button{flex:1}
+.show{background:#2563eb;width:100%}
+.ok{background:#059669}.ng{background:#dc2626}.sp{background:#374151}
+.hide{display:none}
+footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
+</style>
+</head>
+<body>
+<header>
+  <div class="stat">今日 <b id="done">0</b> / 残り <b id="left">0</b></div>
+  <select id="cat"></select>
+  <select id="dir"><option value="ja">日→英</option><option value="en">英→日</option></select>
+</header>
+<div class="card">
+  <div class="tag" id="tag"></div>
+  <div class="q" id="q"></div>
+  <div class="a" id="a"></div>
+</div>
+<button class="show" id="show">答えを見る</button>
+<div id="judge" class="hide">
+  <div class="row"><button class="sp" id="speak">🔊 発音</button></div>
+  <div class="row"><button class="ng" id="ng">もう一度</button><button class="ok" id="ok">覚えた</button></div>
+</div>
+<footer>覚えたカードは間隔を空けて再出題されます(1→3→7→14→30日)</footer>
+<script src="cards.js"></script>
+<script>
+const KEY="shionoEnglishSRS_v1",INTERVALS=[0,1,3,7,14,30];
+const day=()=>Math.floor(Date.now()/864e5);
+let state=JSON.parse(localStorage.getItem(KEY)||"{}");
+let log=JSON.parse(localStorage.getItem(KEY+"_log")||"{}");
+const save=()=>{localStorage.setItem(KEY,JSON.stringify(state));localStorage.setItem(KEY+"_log",JSON.stringify(log))};
+const cats=["すべて",...new Set(CARDS.map(c=>c[0]))];
+const catSel=document.getElementById("cat");
+cats.forEach(c=>catSel.add(new Option(c,c)));
+const $=id=>document.getElementById(id);
+let queue=[],cur=null;
+function build(){
+  const c=catSel.value,t=day();
+  queue=CARDS.map((x,i)=>i).filter(i=>(c==="すべて"||CARDS[i][0]===c)&&(!state[i]||state[i].due<=t));
+  queue.sort((a,b)=>(state[a]?1:0)-(state[b]?1:0)||Math.random()-.5);
+  next();
+}
+function next(){
+  $("done").textContent=log[day()]||0;
+  $("left").textContent=queue.length;
+  $("judge").classList.add("hide");$("show").classList.remove("hide");
+  $("a").textContent="";
+  if(!queue.length){cur=null;$("tag").textContent="";$("q").textContent="今日の復習は完了";return}
+  cur=queue[0];const c=CARDS[cur];
+  $("tag").textContent=c[0];
+  $("q").textContent=$("dir").value==="ja"?c[2]:c[1];
+}
+$("show").onclick=()=>{
+  if(cur===null)return;const c=CARDS[cur];
+  $("a").textContent=$("dir").value==="ja"?c[1]:c[2];
+  $("show").classList.add("hide");$("judge").classList.remove("hide");
+  speak();
+};
+function speak(){
+  if(cur===null||!window.speechSynthesis)return;
+  const u=new SpeechSynthesisUtterance(CARDS[cur][1]);u.lang="en-US";u.rate=.9;
+  speechSynthesis.cancel();speechSynthesis.speak(u);
+}
+$("speak").onclick=speak;
+function grade(ok){
+  const s=state[cur]||{lv:0};
+  s.lv=ok?Math.min(s.lv+1,5):0;
+  s.due=day()+INTERVALS[s.lv];
+  state[cur]=s;log[day()]=(log[day()]||0)+1;save();
+  queue.shift();
+  if(!ok)queue.splice(Math.min(3,queue.length),0,cur);
+  next();
+}
+$("ok").onclick=()=>grade(true);
+$("ng").onclick=()=>grade(false);
+catSel.onchange=build;$("dir").onchange=next;
+build();
+</script>
+</body>
+</html>
