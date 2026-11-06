@@ -44,6 +44,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <div class="a" id="a"></div>
 </div>
 <div class="heard" id="heard"></div>
+<input id="typed" class="hide" placeholder="ここに英語で入力(キーボードの🎤で音声入力)" autocapitalize="off" autocomplete="off" style="width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid #374151;background:#1f2937;color:#f9fafb;margin-bottom:8px">
 <button class="mic" id="mic">🎤 英語で答える</button>
 <button class="show" id="show">答えを見る</button>
 <div id="judge" class="hide">
@@ -73,8 +74,9 @@ function next(){
   $("done").textContent=log[day()]||0;
   $("left").textContent=queue.length;
   $("judge").classList.add("hide");$("show").classList.remove("hide");
-  if(SR)$("mic").classList.remove("hide");
-  $("mic").textContent="🎤 英語で答える";$("heard").textContent="";
+  $("mic").classList.remove("hide");$("typed").value="";
+  if(!SR)$("typed").classList.remove("hide");
+  $("mic").textContent=SR?"🎤 英語で答える":"✅ 答え合わせ";$("heard").textContent="";
   $("a").textContent="";
   if(!queue.length){cur=null;$("tag").textContent="";$("q").textContent="今日の復習は完了";return}
   cur=queue[0];const c=CARDS[cur];
@@ -101,11 +103,19 @@ function similarity(a,b){
 function reveal(){
   if(cur===null)return;const c=CARDS[cur];
   $("a").textContent=$("dir").value==="ja"?c[1]:c[2];
-  $("show").classList.add("hide");$("mic").classList.add("hide");$("judge").classList.remove("hide");
+  $("show").classList.add("hide");$("mic").classList.add("hide");$("typed").classList.add("hide");$("judge").classList.remove("hide");
 }
-if(!SR){$("mic").classList.add("hide")}
+function judgeText(text){
+  if(!text)return;const c=CARDS[cur];
+  if($("dir").value==="ja"){
+    $("heard").innerHTML="あなた: "+text+' <span class="score">(一致 '+similarity(text,c[1])+'%)</span>';
+  }
+  reveal();speak(.9);
+}
+if(!SR){$("typed").classList.remove("hide");$("mic").textContent="✅ 答え合わせ"}
 $("mic").onclick=()=>{
-  if(cur===null||!SR)return;
+  if(cur===null)return;
+  if(!SR){judgeText($("typed").value.trim());return}
   if(rec){rec.stop();return}
   speechSynthesis&&speechSynthesis.cancel();
   rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=1;
@@ -116,12 +126,7 @@ $("mic").onclick=()=>{
   rec.onend=()=>{
     rec=null;$("mic").classList.remove("rec");$("mic").textContent="🎤 もう一度答える";
     if(!text)return;
-    const c=CARDS[cur];
-    if($("dir").value==="ja"){
-      const sc=similarity(text,c[1]);
-      $("heard").innerHTML="あなた: "+text+' <span class="score">(一致 '+sc+'%)</span>';
-    }
-    reveal();speak(.9);
+    judgeText(text);
   };
   try{rec.start()}catch(_){rec=null}
 };
