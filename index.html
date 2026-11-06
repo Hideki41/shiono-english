@@ -44,8 +44,8 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <div class="a" id="a"></div>
 </div>
 <div class="heard" id="heard"></div>
-<input id="typed" class="hide" placeholder="ここに英語で入力(キーボードの🎤で音声入力)" autocapitalize="off" autocomplete="off" style="width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid #374151;background:#1f2937;color:#f9fafb;margin-bottom:8px">
-<button class="mic" id="mic">🎤 英語で答える</button>
+<input id="typed" placeholder="英語で入力 / 🎤で音声入力" autocapitalize="off" autocomplete="off" style="width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid #374151;background:#1f2937;color:#f9fafb;margin-bottom:8px">
+<div class="row" id="ansrow"><button class="mic" id="mic" style="margin:0">🎤 音声</button><button class="mic" id="check" style="margin:0;background:#2563eb">✅ 答え合わせ</button></div>
 <button class="show" id="show">答えを見る</button>
 <div id="judge" class="hide">
   <div class="row"><button class="sp" id="speak">🔊 正解を聞く</button><button class="sp" id="slow">🐢 ゆっくり</button></div>
@@ -74,9 +74,8 @@ function next(){
   $("done").textContent=log[day()]||0;
   $("left").textContent=queue.length;
   $("judge").classList.add("hide");$("show").classList.remove("hide");
-  $("mic").classList.remove("hide");$("typed").value="";
-  if(!SR)$("typed").classList.remove("hide");
-  $("mic").textContent=SR?"🎤 英語で答える":"✅ 答え合わせ";$("heard").textContent="";
+  $("ansrow").classList.remove("hide");$("typed").classList.remove("hide");$("typed").value="";
+  $("mic").textContent="🎤 音声";$("heard").textContent="";
   $("a").textContent="";
   if(!queue.length){cur=null;$("tag").textContent="";$("q").textContent="今日の復習は完了";return}
   cur=queue[0];const c=CARDS[cur];
@@ -103,30 +102,30 @@ function similarity(a,b){
 function reveal(){
   if(cur===null)return;const c=CARDS[cur];
   $("a").textContent=$("dir").value==="ja"?c[1]:c[2];
-  $("show").classList.add("hide");$("mic").classList.add("hide");$("typed").classList.add("hide");$("judge").classList.remove("hide");
+  $("show").classList.add("hide");$("ansrow").classList.add("hide");$("typed").classList.add("hide");$("judge").classList.remove("hide");
 }
 function judgeText(text){
-  if(!text)return;const c=CARDS[cur];
-  if($("dir").value==="ja"){
+  if(cur===null)return;const c=CARDS[cur];
+  if(text&&$("dir").value==="ja"){
     $("heard").innerHTML="あなた: "+text+' <span class="score">(一致 '+similarity(text,c[1])+'%)</span>';
   }
   reveal();speak(.9);
 }
-if(!SR){$("typed").classList.remove("hide");$("mic").textContent="✅ 答え合わせ"}
+if(!SR)$("mic").classList.add("hide");
+$("check").onclick=()=>judgeText($("typed").value.trim());
+$("typed").addEventListener("keydown",e=>{if(e.key==="Enter")judgeText($("typed").value.trim())});
 $("mic").onclick=()=>{
-  if(cur===null)return;
-  if(!SR){judgeText($("typed").value.trim());return}
+  if(cur===null||!SR)return;
   if(rec){rec.stop();return}
   speechSynthesis&&speechSynthesis.cancel();
   rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=1;
-  let text="";
-  $("mic").classList.add("rec");$("mic").textContent="⏹ 話し終えたら押す";$("heard").textContent="聞き取り中…";
-  rec.onresult=e=>{text=[...e.results].map(r=>r[0].transcript).join(" ");$("heard").textContent="あなた: "+text};
+  $("mic").classList.add("rec");$("mic").textContent="⏹ 停止";$("heard").textContent="聞き取り中…";
+  rec.onresult=e=>{$("typed").value=[...e.results].map(r=>r[0].transcript).join(" ")};
   rec.onerror=e=>{$("heard").textContent="マイクが使えません ("+e.error+")。設定でマイクを許可してください"};
   rec.onend=()=>{
-    rec=null;$("mic").classList.remove("rec");$("mic").textContent="🎤 もう一度答える";
-    if(!text)return;
-    judgeText(text);
+    rec=null;$("mic").classList.remove("rec");$("mic").textContent="🎤 音声";
+    if($("heard").textContent==="聞き取り中…")$("heard").textContent="";
+    if($("typed").value.trim())$("heard").textContent="直して「答え合わせ」を押す";
   };
   try{rec.start()}catch(_){rec=null}
 };
