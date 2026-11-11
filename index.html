@@ -52,7 +52,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <div class="opts"><button class="sp" id="lmclose" style="font-size:14px;padding:8px 12px;border-radius:8px">← 戻る</button>
     <span id="lmcat"></span>
     <label>速度 <select id="lmrate"><option value=".8">ゆっくり</option><option value=".95" selected>ふつう</option><option value="1.1">はやい</option></select></label>
-    <label><input type="checkbox" id="lmshuf"> シャッフル</label></div>
+    <label><input type="checkbox" id="lmshuf"> シャッフル(読み上げ時のみ)</label></div>
   <div class="card"><div class="lc" id="lmcnt"></div><div class="lj" id="lmja"></div><div class="le" id="lmen"></div></div>
   <button id="lmplay">▶ 再生（止めるまで流れ続けます）</button>
   <div class="opts" id="lmnote">日本語1回 → 英語3回 を繰り返します。音声ファイル再生なので、画面ロック・他アプリ使用中も流れます。</div>
@@ -201,16 +201,16 @@ function lmList(){
   if($("lmshuf").checked)l.sort(()=>Math.random()-.5);
   return l;
 }
-let AUD=null,lmAudio=new Audio(),lmIdx=[];
-fetch("audio/index.json").then(r=>r.ok?r.json():null).then(j=>{if(j&&j.length===CARDS.length)AUD=j}).catch(()=>{});
-function playFile(name,run){
-  return new Promise(res=>{
-    if(run!==lmRun)return res();
-    const done=()=>{lmAudio.onended=lmAudio.onerror=null;res()};
-    lmAudio.onended=done;lmAudio.onerror=done;
-    lmAudio.src="audio/"+name;lmAudio.play().catch(done);
-  });
-}
+let PL=null,lmAudio=new Audio();lmAudio.loop=true;
+fetch("audio/playlists.json").then(r=>r.ok?r.json():null).then(j=>{if(j)PL=j}).catch(()=>{});
+function lmShow(i,n){const c=CARDS[i];$("lmcnt").textContent=(n)+" / "+lmTotal;$("lmja").textContent=c[2];$("lmen").textContent=c[1]}
+let lmTotal=0;
+lmAudio.ontimeupdate=()=>{
+  const m=lmPl;if(!m)return;let k=0;
+  while(k+1<m.starts.length&&m.starts[k+1]<=lmAudio.currentTime)k++;
+  lmTotal=m.cards.length;lmShow(m.cards[k],k+1);
+};
+let lmPl=null;
 async function lmLoop(run){
   const rate=parseFloat($("lmrate").value);
   while(run===lmRun){
@@ -218,9 +218,7 @@ async function lmLoop(run){
     for(let i=0;i<list.length&&run===lmRun;i++){
       const [,en,ja]=list[i];
       $("lmcnt").textContent=(i+1)+" / "+list.length;
-      $("lmja").textContent=ja;$("lmen").textContent=en;
-      if(AUD){await playFile(AUD[CARDS.indexOf(list[i])],run);continue}
-      $("lmen").textContent="";
+      $("lmja").textContent=ja;$("lmen").textContent="";
       await say(ja,"ja-JP",rate,run);await sleep(500);
       for(let k=1;k<=3&&run===lmRun;k++){
         $("lmen").textContent=en;
@@ -235,18 +233,25 @@ async function lmStart(){
   $("lmplay").textContent="■ 停止";$("lmplay").classList.add("on");
   speechSynthesis.cancel();
   try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(_){}
-  if(!lmSilent){lmSilent=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");lmSilent.loop=true}
-  if(!AUD)lmSilent.play().catch(()=>{});
+  lmPl=PL&&PL[catSel.value];
   if("mediaSession"in navigator){
     navigator.mediaSession.metadata=new MediaMetadata({title:"英語 聞き流し",artist:"塩野英語"});
     navigator.mediaSession.playbackState="playing";
+    navigator.mediaSession.setActionHandler("play",()=>lmAudio.play());
     navigator.mediaSession.setActionHandler("pause",lmStop);
     navigator.mediaSession.setActionHandler("stop",lmStop);
   }
+  if(lmPl){
+    lmAudio.src="audio/"+lmPl.file;
+    lmAudio.play().catch(()=>{lmPl=null;lmLoop(lmRun)});
+    return;
+  }
+  if(!lmSilent){lmSilent=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");lmSilent.loop=true}
+  lmSilent.play().catch(()=>{});
   lmLoop(lmRun);
 }
 function lmStop(){
-  lmOn=false;lmRun++;speechSynthesis.cancel();lmAudio.pause();lmAudio.onended=lmAudio.onerror=null;
+  lmOn=false;lmRun++;speechSynthesis.cancel();lmAudio.pause();
   $("lmplay").textContent="▶ 再生（止めるまで流れ続けます）";$("lmplay").classList.remove("on");
   lmSilent&&lmSilent.pause();
   if(wake){wake.release().catch(()=>{});wake=null}
