@@ -30,6 +30,15 @@ button{font-size:18px;border:0;border-radius:14px;padding:16px;font-weight:600;c
 .heard{font-size:16px;line-height:1.5;color:#a5b4fc;min-height:1.5em;text-align:center;margin-bottom:6px}
 .score{font-size:14px;color:#9ca3af}
 footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
+#lm{position:fixed;inset:0;background:#111827;z-index:10;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+#lm.hide{display:none}
+#lm .card{flex:1}
+#lm .lj{font-size:24px;color:#9ca3af;line-height:1.5}
+#lm .le{font-size:30px;font-weight:700;line-height:1.4;color:#fbbf24}
+#lm .lc{font-size:14px;color:#34d399;min-height:1.4em}
+#lmplay{width:100%;padding:26px;font-size:24px;background:#059669;margin:8px 0}
+#lmplay.on{background:#dc2626}
+#lm .opts{display:flex;gap:10px;align-items:center;color:#9ca3af;font-size:14px;margin:6px 0;flex-wrap:wrap}
 </style>
 </head>
 <body>
@@ -37,7 +46,17 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <div class="stat">今日 <b id="done">0</b> / 残り <b id="left">0</b></div>
   <select id="cat"></select>
   <select id="dir"><option value="ja">日→英</option><option value="en">英→日</option></select>
+  <button class="sp" id="lmopen" style="font-size:14px;padding:6px 10px;border-radius:8px">🎧 聞き流し</button>
 </header>
+<div id="lm" class="hide">
+  <div class="opts"><button class="sp" id="lmclose" style="font-size:14px;padding:8px 12px;border-radius:8px">← 戻る</button>
+    <span id="lmcat"></span>
+    <label>速度 <select id="lmrate"><option value=".8">ゆっくり</option><option value=".95" selected>ふつう</option><option value="1.1">はやい</option></select></label>
+    <label><input type="checkbox" id="lmshuf"> シャッフル</label></div>
+  <div class="card"><div class="lc" id="lmcnt"></div><div class="lj" id="lmja"></div><div class="le" id="lmen"></div></div>
+  <button id="lmplay">▶ 再生（止めるまで流れ続けます）</button>
+  <div class="opts" id="lmnote">日本語1回 → 英語3回 を繰り返します。画面ロックで止まる端末では、画面を点けたままにしてください。</div>
+</div>
 <div class="card">
   <div class="tag" id="tag"></div>
   <div class="q" id="q"></div>
@@ -71,6 +90,7 @@ function build(){
   next();
 }
 function next(){
+  if(recOn){recOn=false;rec&&rec.abort()}
   $("done").textContent=log[day()]||0;
   $("left").textContent=queue.length;
   $("judge").classList.add("hide");$("show").classList.remove("hide");
@@ -106,6 +126,7 @@ function reveal(){
 }
 function judgeText(text){
   if(cur===null)return;const c=CARDS[cur];
+  if(recOn){recOn=false;rec&&rec.stop()}
   if(text&&$("dir").value==="ja"){
     $("heard").innerHTML="あなた: "+text+' <span class="score">(一致 '+similarity(text,c[1])+'%)</span>';
   }
@@ -116,19 +137,38 @@ $("check").onclick=()=>judgeText($("typed").value.trim());
 $("typed").addEventListener("keydown",e=>{if(e.key==="Enter")judgeText($("typed").value.trim())});
 $("mic").onclick=()=>{
   if(cur===null||!SR)return;
-  if(rec){rec.stop();return}
+  if(recOn){recOn=false;rec&&rec.stop();return}
   speechSynthesis&&speechSynthesis.cancel();
-  rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.maxAlternatives=1;
-  $("mic").classList.add("rec");$("mic").textContent="⏹ 停止";$("heard").textContent="聞き取り中…";
-  rec.onresult=e=>{$("typed").value=[...e.results].map(r=>r[0].transcript).join(" ")};
-  rec.onerror=e=>{$("heard").textContent="マイクが使えません ("+e.error+")。設定でマイクを許可してください"};
-  rec.onend=()=>{
-    rec=null;$("mic").classList.remove("rec");$("mic").textContent="🎤 音声";
-    if($("heard").textContent==="聞き取り中…")$("heard").textContent="";
-    if($("typed").value.trim())$("heard").textContent="直して「答え合わせ」を押す";
-  };
-  try{rec.start()}catch(_){rec=null}
+  recOn=true;committed=$("typed").value.trim();
+  $("mic").classList.add("rec");$("mic").textContent="⏹ 停止";$("heard").textContent="聞き取り中…（終わったら停止を押す）";
+  startRec();
 };
+let recOn=false,committed="";
+function finishRec(){
+  recOn=false;rec=null;$("mic").classList.remove("rec");$("mic").textContent="🎤 音声";
+  if($("heard").textContent.startsWith("聞き取り中"))$("heard").textContent="";
+  if($("typed").value.trim())$("heard").textContent="直して「答え合わせ」を押す";
+}
+function startRec(){
+  rec=new SR();rec.lang="en-US";rec.interimResults=true;rec.continuous=true;rec.maxAlternatives=1;
+  rec.onresult=e=>{
+    const t=[...e.results].map(r=>r[0].transcript).join(" ").trim();
+    $("typed").value=(committed+" "+t).trim();
+  };
+  rec.onerror=e=>{
+    if(e.error==="no-speech"||e.error==="aborted")return;
+    $("heard").textContent="マイクが使えません ("+e.error+")。設定でマイクを許可してください";
+    recOn=false;
+  };
+  rec.onend=()=>{
+    if(recOn){
+      committed=$("typed").value.trim();
+      try{startRec();return}catch(_){}
+    }
+    finishRec();
+  };
+  try{rec.start()}catch(_){finishRec()}
+}
 function grade(ok){
   const s=state[cur]||{lv:0};
   s.lv=ok?Math.min(s.lv+1,5):0;
@@ -142,6 +182,70 @@ $("ok").onclick=()=>grade(true);
 $("ng").onclick=()=>grade(false);
 catSel.onchange=build;$("dir").onchange=next;
 build();
+
+// ---- 聞き流しモード: 日本語1回 → 英語3回 を止めるまで無限ループ ----
+let lmOn=false,lmRun=0,wake=null,lmSilent=null;
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+function say(text,lang,rate,run){
+  return new Promise(res=>{
+    if(!window.speechSynthesis||run!==lmRun)return res();
+    const u=new SpeechSynthesisUtterance(text);u.lang=lang;u.rate=rate;
+    const t=setTimeout(res,20000);
+    u.onend=u.onerror=()=>{clearTimeout(t);res()};
+    speechSynthesis.speak(u);
+  });
+}
+function lmList(){
+  const c=catSel.value;
+  const l=CARDS.filter(x=>c==="すべて"||x[0]===c);
+  if($("lmshuf").checked)l.sort(()=>Math.random()-.5);
+  return l;
+}
+async function lmLoop(run){
+  const rate=parseFloat($("lmrate").value);
+  while(run===lmRun){
+    const list=lmList();
+    for(let i=0;i<list.length&&run===lmRun;i++){
+      const [,en,ja]=list[i];
+      $("lmcnt").textContent=(i+1)+" / "+list.length;
+      $("lmja").textContent=ja;$("lmen").textContent="";
+      await say(ja,"ja-JP",rate,run);await sleep(500);
+      for(let k=1;k<=3&&run===lmRun;k++){
+        $("lmen").textContent=en;
+        await say(en,"en-US",rate,run);await sleep(700);
+      }
+      await sleep(600);
+    }
+  }
+}
+async function lmStart(){
+  lmOn=true;lmRun++;
+  $("lmplay").textContent="■ 停止";$("lmplay").classList.add("on");
+  speechSynthesis.cancel();
+  try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(_){}
+  if(!lmSilent){lmSilent=new Audio("data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQAAAAA=");lmSilent.loop=true}
+  lmSilent.play().catch(()=>{});
+  if("mediaSession"in navigator){
+    navigator.mediaSession.metadata=new MediaMetadata({title:"英語 聞き流し",artist:"塩野英語"});
+    navigator.mediaSession.playbackState="playing";
+    navigator.mediaSession.setActionHandler("pause",lmStop);
+    navigator.mediaSession.setActionHandler("stop",lmStop);
+  }
+  lmLoop(lmRun);
+}
+function lmStop(){
+  lmOn=false;lmRun++;speechSynthesis.cancel();
+  $("lmplay").textContent="▶ 再生（止めるまで流れ続けます）";$("lmplay").classList.remove("on");
+  lmSilent&&lmSilent.pause();
+  if(wake){wake.release().catch(()=>{});wake=null}
+  if("mediaSession"in navigator)navigator.mediaSession.playbackState="none";
+}
+document.addEventListener("visibilitychange",async()=>{
+  if(lmOn&&document.visibilityState==="visible"&&navigator.wakeLock&&!wake){try{wake=await navigator.wakeLock.request("screen")}catch(_){}}
+});
+$("lmplay").onclick=()=>lmOn?lmStop():lmStart();
+$("lmopen").onclick=()=>{speechSynthesis.cancel();$("lmcat").textContent=catSel.value;$("lm").classList.remove("hide")};
+$("lmclose").onclick=()=>{lmStop();$("lm").classList.add("hide")};
 </script>
 </body>
 </html>
