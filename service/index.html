@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f2937">
+<title>英語接客練習</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,"Hiragino Sans","Yu Gothic",sans-serif;background:#111827;color:#f9fafb;min-height:100vh;display:flex;flex-direction:column;padding:env(safe-area-inset-top) 16px env(safe-area-inset-bottom);max-width:720px;margin:0 auto}
+nav{display:flex;gap:6px;padding:12px 0}
+nav button{flex:1;font-size:15px;padding:12px 4px;border-radius:10px;background:#1f2937;color:#9ca3af}
+nav button.on{background:#2563eb;color:#fff}
+button{font-size:17px;border:0;border-radius:12px;padding:14px;font-weight:600;color:#fff;cursor:pointer}
+select{background:#1f2937;color:#f9fafb;border:1px solid #374151;border-radius:8px;padding:8px;font-size:15px}
+.bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:#9ca3af;font-size:14px;margin-bottom:8px}
+.card{flex:1;display:flex;flex-direction:column;justify-content:center;gap:16px;text-align:center;padding:10px 2px}
+.tag{font-size:12px;color:#9ca3af}
+.big{font-size:24px;line-height:1.5;font-weight:600}
+.en{font-size:26px;line-height:1.5;color:#fbbf24;font-weight:600}
+.ja{font-size:18px;line-height:1.5;color:#9ca3af}
+.heard{font-size:16px;color:#a5b4fc;min-height:1.5em;text-align:center}
+.row{display:flex;gap:10px;margin:8px 0}
+.row button{flex:1}
+.sp{background:#374151}.ok{background:#059669}.ng{background:#dc2626}.pr{background:#2563eb}.mic{background:#7c3aed}.mic.rec{background:#dc2626}
+.hide{display:none!important}
+.sent{padding:12px;border-radius:12px;background:#1f2937;margin:6px 0;text-align:left}
+.sent.cur{outline:2px solid #fbbf24}
+.sent .e{font-size:20px;color:#fbbf24;line-height:1.5}
+.sent .j{font-size:15px;color:#9ca3af;margin-top:4px}
+#list{overflow:auto;flex:1}
+input[type=text]{width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid #374151;background:#1f2937;color:#f9fafb;margin-bottom:8px}
+footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
+</style>
+</head>
+<body>
+<nav>
+  <button id="t-read" class="on">📖 作家</button>
+  <button id="t-listen">👂 リスニング</button>
+  <button id="t-speak">🗣 スピーキング</button>
+</nav>
+<div class="bar" id="bar"></div>
+
+<section id="s-read">
+  <div id="list"></div>
+  <div class="row"><button class="sp" id="r-all">🔊 全文を聞く</button><button class="mic" id="r-mic">🎤 1文ずつ音読チェック</button></div>
+  <div class="heard" id="r-heard"></div>
+</section>
+
+<section id="s-listen" class="hide" style="flex:1;display:flex;flex-direction:column">
+  <div class="card">
+    <div class="tag" id="l-tag"></div>
+    <div class="big" id="l-q">🔈 ボタンを押すとお客様の質問が流れます</div>
+    <div class="ja" id="l-ja"></div>
+  </div>
+  <div class="row"><button class="pr" id="l-play">🔊 質問を聞く</button><button class="sp" id="l-slow">🐢 ゆっくり</button></div>
+  <input type="text" id="l-type" placeholder="聞こえた英語を入力（任意）" autocomplete="off">
+  <div class="heard" id="l-heard"></div>
+  <button class="pr hide" id="l-show" style="width:100%">答えを見る（質問の文字と意味）</button>
+  <div class="row hide" id="l-judge"><button class="ng" id="l-ng">聞き取れず</button><button class="ok" id="l-ok">聞き取れた</button></div>
+</section>
+
+<section id="s-speak" class="hide" style="flex:1;display:flex;flex-direction:column">
+  <div class="card">
+    <div class="tag" id="p-tag"></div>
+    <div class="big" id="p-ja"></div>
+    <div class="en" id="p-en"></div>
+  </div>
+  <div class="heard" id="p-heard"></div>
+  <input type="text" id="p-type" placeholder="英語で言う／入力（🎤で音声入力）" autocomplete="off">
+  <div class="row" id="p-ans"><button class="mic" id="p-mic">🎤 音声</button><button class="pr" id="p-check">✅ 答え合わせ</button></div>
+  <button class="pr" id="p-show" style="width:100%">答えを見る</button>
+  <div id="p-judge" class="hide">
+    <div class="row"><button class="sp" id="p-hear">🔊 お手本</button><button class="sp" id="p-slow">🐢 ゆっくり</button></div>
+    <div class="row"><button class="ng" id="p-ng">もう一度</button><button class="ok" id="p-ok">言えた</button></div>
+  </div>
+</section>
+
+<footer>ステートメントは資料にある事実のみ。価格・規定は社内で確認のうえ使うこと</footer>
+<script src="data.js"></script>
+<script>
+const $=id=>document.getElementById(id);
+const KEY="shionoService_v1";
+const day=()=>Math.floor(Date.now()/864e5);
+let st=JSON.parse(localStorage.getItem(KEY)||"{}");
+const save=()=>localStorage.setItem(KEY,JSON.stringify(st));
+const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+const words=t=>t.toLowerCase().replace(/[^a-z0-9' ]/g," ").split(/\s+/).filter(Boolean);
+function sim(a,b){const A=words(a),B=words(b);if(!B.length)return 0;const p=[...A];let h=0;B.forEach(w=>{const i=p.indexOf(w);if(i>=0){h++;p.splice(i,1)}});return Math.round(h/B.length*100)}
+function say(text,rate){if(!window.speechSynthesis)return Promise.resolve();return new Promise(res=>{const u=new SpeechSynthesisUtterance(text);u.lang="en-US";u.rate=rate||.9;u.onend=u.onerror=res;speechSynthesis.cancel();speechSynthesis.speak(u)})}
+function listenOnce(onText,onEnd){
+  const r=new SR();r.lang="en-US";r.interimResults=true;r.continuous=true;
+  r.onresult=e=>onText([...e.results].map(x=>x[0].transcript).join(" ").trim());
+  r.onerror=()=>{};r.onend=onEnd;try{r.start()}catch(_){onEnd()}return r;
+}
+const bar=$("bar");
+let tab="read";
+function setTab(t){
+  tab=t;speechSynthesis&&speechSynthesis.cancel();
+  ["read","listen","speak"].forEach(k=>{$("t-"+k).classList.toggle("on",k===t);$("s-"+k).classList.toggle("hide",k!==t)});
+  if(t==="read")initRead();else if(t==="listen")initListen();else initSpeak();
+}
+["read","listen","speak"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
+
+/* ---- 作家(読む・音読) ---- */
+let art=ARTISTS[0],ri=-1,rrec=null;
+function initRead(){
+  bar.innerHTML='作家 <select id="asel"></select><select id="ksel"><option value="statement">紹介・コンセプト</option><option value="explain">説明</option><option value="suggest">提案</option></select>';
+  ARTISTS.forEach(a=>$("asel").add(new Option(a.name+" / "+a.en,a.id)));
+  $("asel").value=art.id;
+  $("asel").onchange=()=>{art=ARTISTS.find(a=>a.id===$("asel").value);renderRead()};
+  $("ksel").onchange=renderRead;
+  renderRead();
+}
+function rItems(){return art[$("ksel").value]||[]}
+function renderRead(){
+  ri=-1;$("r-heard").textContent="";
+  $("list").innerHTML=rItems().map((s,i)=>`<div class="sent" id="rs${i}"><div class="e">${s[0]}</div><div class="j">${s[1]}</div></div>`).join("");
+}
+function mark(i){document.querySelectorAll(".sent").forEach(e=>e.classList.remove("cur"));const e=$("rs"+i);e&&e.classList.add("cur")}
+$("r-all").onclick=async()=>{const items=rItems();for(let i=0;i<items.length;i++){mark(i);await say(items[i][0],.85)}mark(-1)};
+$("r-mic").onclick=()=>{
+  if(!SR){$("r-heard").textContent="このブラウザは音声認識に未対応です";return}
+  const items=rItems();
+  if(rrec){rrec.stop();rrec=null;return}
+  ri=(ri+1)%items.length;mark(ri);
+  $("r-mic").textContent="⏹ 読み終わったら停止";let txt="";
+  rrec=listenOnce(t=>{txt=t;$("r-heard").textContent="あなた: "+t},()=>{
+    rrec=null;$("r-mic").textContent="🎤 1文ずつ音読チェック";
+    if(txt)$("r-heard").innerHTML="あなた: "+txt+' <b style="color:#34d399">(一致 '+sim(txt,items[ri][0])+'%)</b> / 次の文へは再度🎤';
+  });
+};
+
+/* ---- リスニング ---- */
+let lq=null;
+const lStats=()=>QUESTIONS.length;
+function initListen(){
+  bar.innerHTML='区分 <select id="lcat"><option>すべて</option>'+[...new Set(QUESTIONS.map(q=>q[0]))].map(c=>`<option>${c}</option>`).join("")+'</select><span id="lcnt"></span>';
+  $("lcat").onchange=lNext;lNext();
+}
+function lNext(){
+  const c=$("lcat").value;
+  const pool=QUESTIONS.map((q,i)=>i).filter(i=>c==="すべて"||QUESTIONS[i][0]===c);
+  pool.sort((a,b)=>((st["l"+a]||{}).due||0)-((st["l"+b]||{}).due||0)||Math.random()-.5);
+  lq=pool[0];
+  $("lcnt").textContent="今日 "+((st.log||{})[day()]||0)+" 問";
+  $("l-tag").textContent=QUESTIONS[lq][0];
+  $("l-q").textContent="🔈 ボタンを押すとお客様の質問が流れます";$("l-ja").textContent="";$("l-heard").textContent="";$("l-type").value="";
+  $("l-show").classList.remove("hide");$("l-judge").classList.add("hide");
+  say(QUESTIONS[lq][1],.9);
+}
+$("l-play").onclick=()=>say(QUESTIONS[lq][1],.9);
+$("l-slow").onclick=()=>say(QUESTIONS[lq][1],.6);
+$("l-show").onclick=()=>{
+  const q=QUESTIONS[lq],t=$("l-type").value.trim();
+  $("l-q").textContent=q[1];$("l-ja").textContent=q[2];
+  if(t)$("l-heard").innerHTML="あなた: "+t+' <b style="color:#34d399">(一致 '+sim(t,q[1])+'%)</b>';
+  $("l-show").classList.add("hide");$("l-judge").classList.remove("hide");
+};
+function lGrade(ok){
+  const k="l"+lq,s=st[k]||{lv:0},iv=[0,1,3,7,14];
+  s.lv=ok?Math.min(s.lv+1,4):0;s.due=day()+iv[s.lv];st[k]=s;
+  st.log=st.log||{};st.log[day()]=(st.log[day()]||0)+1;save();lNext();
+}
+$("l-ok").onclick=()=>lGrade(true);$("l-ng").onclick=()=>lGrade(false);
+
+/* ---- スピーキング ---- */
+let pi=null,prec=null,pOn=false,pCommit="";
+function initSpeak(){
+  bar.innerHTML='区分 <select id="pcat"><option>すべて</option><option>答え</option><option>提案</option><option>説明</option><option>作家の説明</option></select><span id="pcnt"></span>';
+  $("pcat").onchange=pNext;pNext();
+}
+function pPool(){
+  const c=$("pcat").value;let out=[];
+  if(c==="すべて"||c==="答え"||c==="提案"||c==="説明")SPEAK.forEach((s,i)=>{if(c==="すべて"||s[0]===c)out.push({id:"s"+i,tag:s[0]+"｜"+s[1],ja:s[3],en:s[2]})});
+  if(c==="すべて"||c==="作家の説明")ARTISTS.forEach(a=>{["explain","suggest"].forEach(k=>a[k].forEach((s,i)=>out.push({id:a.id+k+i,tag:(k==="explain"?"説明":"提案")+"｜"+a.name,ja:s[1],en:s[0]})));a.statement.forEach((s,i)=>out.push({id:a.id+"st"+i,tag:"紹介｜"+a.name,ja:s[1],en:s[0]}))});
+  return out;
+}
+function pNext(){
+  if(pOn){pOn=false;prec&&prec.stop()}
+  const pool=pPool();pool.sort((a,b)=>((st[a.id]||{}).due||0)-((st[b.id]||{}).due||0)||Math.random()-.5);
+  pi=pool[0];
+  $("pcnt").textContent="今日 "+((st.plog||{})[day()]||0)+" 問";
+  $("p-tag").textContent=pi.tag;$("p-ja").textContent=pi.ja;$("p-en").textContent="";$("p-heard").textContent="";$("p-type").value="";
+  $("p-mic").textContent="🎤 音声";$("p-mic").classList.remove("rec");
+  ["p-ans","p-type","p-show"].forEach(i=>$(i).classList.remove("hide"));$("p-judge").classList.add("hide");
+}
+function pReveal(){
+  const t=$("p-type").value.trim();
+  if(pOn){pOn=false;prec&&prec.stop()}
+  if(t)$("p-heard").innerHTML="あなた: "+t+' <b style="color:#34d399">(一致 '+sim(t,pi.en)+'%)</b>';
+  $("p-en").textContent=pi.en;
+  ["p-ans","p-type","p-show"].forEach(i=>$(i).classList.add("hide"));$("p-judge").classList.remove("hide");
+  say(pi.en,.9);
+}
+$("p-show").onclick=pReveal;$("p-check").onclick=pReveal;
+$("p-hear").onclick=()=>say(pi.en,.9);$("p-slow").onclick=()=>say(pi.en,.6);
+if(!SR)$("p-mic").classList.add("hide");
+$("p-mic").onclick=()=>{
+  if(pOn){pOn=false;prec&&prec.stop();return}
+  speechSynthesis.cancel();pOn=true;pCommit=$("p-type").value.trim();
+  $("p-mic").classList.add("rec");$("p-mic").textContent="⏹ 停止";$("p-heard").textContent="聞き取り中…（終わったら停止）";
+  const run=()=>{prec=listenOnce(t=>{$("p-type").value=(pCommit+" "+t).trim()},()=>{
+    if(pOn){pCommit=$("p-type").value.trim();run();return}
+    $("p-mic").classList.remove("rec");$("p-mic").textContent="🎤 音声";$("p-heard").textContent="直して「答え合わせ」を押す";
+  })};run();
+};
+function pGrade(ok){
+  const s=st[pi.id]||{lv:0},iv=[0,1,3,7,14];
+  s.lv=ok?Math.min(s.lv+1,4):0;s.due=day()+iv[s.lv];st[pi.id]=s;
+  st.plog=st.plog||{};st.plog[day()]=(st.plog[day()]||0)+1;save();pNext();
+}
+$("p-ok").onclick=()=>pGrade(true);$("p-ng").onclick=()=>pGrade(false);
+
+setTab("read");
+</script>
+</body>
+</html>
