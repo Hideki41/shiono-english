@@ -30,6 +30,13 @@ select{background:#1f2937;color:#f9fafb;border:1px solid #374151;border-radius:8
 .sent .j{font-size:15px;color:#9ca3af;margin-top:4px}
 #list{overflow:auto;flex:1}
 input[type=text]{width:100%;font-size:18px;padding:14px;border-radius:12px;border:1px solid #374151;background:#1f2937;color:#f9fafb;margin-bottom:8px}
+#lm{position:fixed;inset:0;background:#111827;z-index:10;display:flex;flex-direction:column;padding:calc(env(safe-area-inset-top) + 16px) 16px calc(env(safe-area-inset-bottom) + 16px)}
+#lm .card{flex:1}
+#lm .lj{font-size:20px;color:#9ca3af;line-height:1.6;white-space:pre-line}
+#lm .le{font-size:26px;font-weight:700;line-height:1.4;color:#fbbf24;white-space:pre-line}
+#lm .lc{font-size:14px;color:#34d399;min-height:1.4em}
+#lmplay{width:100%;padding:26px;font-size:24px;background:#059669;margin:8px 0}
+#lmplay.on{background:#dc2626}
 footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
 </style>
 </head>
@@ -38,6 +45,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <button id="t-read" class="on">📖 作家</button>
   <button id="t-listen">👂 リスニング</button>
   <button id="t-speak">🗣 スピーキング</button>
+  <button id="t-lm">🎧 聞き流し</button>
 </nav>
 <div class="bar" id="bar"></div>
 
@@ -52,6 +60,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
     <div class="tag" id="l-tag"></div>
     <div class="big" id="l-q">🔈 ボタンを押すとお客様の質問が流れます</div>
     <div class="ja" id="l-ja"></div>
+    <div id="l-ans" class="hide" style="margin-top:12px;padding-top:10px;border-top:1px solid #374151"><div class="tag">模範回答の例</div><div class="big" id="l-ae" style="font-size:19px"></div><div class="ja" id="l-aj"></div><button class="sp" id="l-aplay" style="margin-top:8px">🔊 回答を聞く</button></div>
   </div>
   <div class="row"><button class="pr" id="l-play">🔊 質問を聞く</button><button class="sp" id="l-slow">🐢 ゆっくり</button></div>
   <input type="text" id="l-type" placeholder="聞こえた英語を入力（任意）" autocomplete="off">
@@ -77,7 +86,15 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
 </section>
 
 <footer>ステートメントは資料にある事実のみ。価格・規定は社内で確認のうえ使うこと</footer>
+<div id="lm" class="hide">
+  <div class="bar"><button class="sp" id="lmclose" style="font-size:14px;padding:8px 12px;border-radius:8px">← 戻る</button>
+    <select id="lmsel"></select></div>
+  <div class="card"><div class="lc" id="lmcnt"></div><div class="lj" id="lmja"></div><div class="le" id="lmen"></div></div>
+  <button id="lmplay">▶ 再生（止めるまで流れ続けます）</button>
+  <div class="bar">音声ファイル再生なので、画面ロック・他アプリ使用中も流れます。</div>
+</div>
 <script src="data.js"></script>
+<script src="answers.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const KEY="shionoService_v1";
@@ -145,7 +162,7 @@ function lNext(){
   lq=pool[0];
   $("lcnt").textContent="今日 "+((st.log||{})[day()]||0)+" 問";
   $("l-tag").textContent=QUESTIONS[lq][0];
-  $("l-q").textContent="🔈 ボタンを押すとお客様の質問が流れます";$("l-ja").textContent="";$("l-heard").textContent="";$("l-type").value="";
+  $("l-q").textContent="🔈 ボタンを押すとお客様の質問が流れます";$("l-ja").textContent="";$("l-heard").textContent="";$("l-type").value="";$("l-ans").classList.add("hide");
   $("l-show").classList.remove("hide");$("l-judge").classList.add("hide");
   say(QUESTIONS[lq][1],.9);
 }
@@ -155,8 +172,10 @@ $("l-show").onclick=()=>{
   const q=QUESTIONS[lq],t=$("l-type").value.trim();
   $("l-q").textContent=q[1];$("l-ja").textContent=q[2];
   if(t)$("l-heard").innerHTML="あなた: "+t+' <b style="color:#34d399">(一致 '+sim(t,q[1])+'%)</b>';
+  const a=ANSWERS[q[1]];if(a){$("l-ae").textContent=a[0];$("l-aj").textContent=a[1];$("l-ans").classList.remove("hide")}
   $("l-show").classList.add("hide");$("l-judge").classList.remove("hide");
 };
+$("l-aplay").onclick=()=>{const a=ANSWERS[QUESTIONS[lq][1]];a&&say(a[0],.9)};
 function lGrade(ok){
   const k="l"+lq,s=st[k]||{lv:0},iv=[0,1,3,7,14];
   s.lv=ok?Math.min(s.lv+1,4):0;s.due=day()+iv[s.lv];st[k]=s;
@@ -211,6 +230,37 @@ function pGrade(ok){
   st.plog=st.plog||{};st.plog[day()]=(st.plog[day()]||0)+1;save();pNext();
 }
 $("p-ok").onclick=()=>pGrade(true);$("p-ng").onclick=()=>pGrade(false);
+
+/* ---- 聞き流し: 音声ファイルを止めるまでループ ---- */
+let PL=null,lmAudio=new Audio(),wake=null,lmOn=false;lmAudio.loop=true;
+fetch("audio/playlists.json").then(r=>r.json()).then(j=>{PL=j;$("lmsel").innerHTML=Object.keys(j).map(k=>`<option>${k}</option>`).join("")}).catch(()=>{});
+lmAudio.ontimeupdate=()=>{
+  const m=PL&&PL[$("lmsel").value];if(!m)return;let k=0;
+  while(k+1<m.starts.length&&m.starts[k+1]<=lmAudio.currentTime)k++;
+  $("lmcnt").textContent=(k+1)+" / "+m.starts.length;$("lmja").textContent=m.ja[k];$("lmen").textContent=m.en[k];
+};
+async function lmStart(){
+  const m=PL&&PL[$("lmsel").value];if(!m)return;
+  lmOn=true;$("lmplay").textContent="■ 停止";$("lmplay").classList.add("on");
+  try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(_){}
+  if("mediaSession"in navigator){
+    navigator.mediaSession.metadata=new MediaMetadata({title:$("lmsel").value,artist:"英語接客練習"});
+    navigator.mediaSession.playbackState="playing";
+    navigator.mediaSession.setActionHandler("play",()=>lmAudio.play());
+    navigator.mediaSession.setActionHandler("pause",lmStop);navigator.mediaSession.setActionHandler("stop",lmStop);
+  }
+  lmAudio.src="audio/"+m.file;lmAudio.play().catch(()=>lmStop());
+}
+function lmStop(){
+  lmOn=false;lmAudio.pause();
+  $("lmplay").textContent="▶ 再生（止めるまで流れ続けます）";$("lmplay").classList.remove("on");
+  if(wake){wake.release().catch(()=>{});wake=null}
+  if("mediaSession"in navigator)navigator.mediaSession.playbackState="none";
+}
+$("lmplay").onclick=()=>lmOn?lmStop():lmStart();
+$("lmsel").onchange=()=>{if(lmOn){lmStop();lmStart()}};
+$("t-lm").onclick=()=>{speechSynthesis.cancel();$("lm").classList.remove("hide")};
+$("lmclose").onclick=()=>{lmStop();$("lm").classList.add("hide")};
 
 setTab("read");
 </script>
