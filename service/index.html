@@ -46,6 +46,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <button id="t-listen">👂 リスニング</button>
   <button id="t-speak">🗣 スピーキング</button>
   <button id="t-lm">🎧 聞き流し</button>
+  <button id="t-work" onclick="location.href='../'">💼 普段の業務</button>
 </nav>
 <div class="bar" id="bar"></div>
 
@@ -90,6 +91,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <div class="bar"><button class="sp" id="lmclose" style="font-size:14px;padding:8px 12px;border-radius:8px">← 戻る</button>
     <select id="lmsel"></select></div>
   <div class="card"><div class="lc" id="lmcnt"></div><div class="lj" id="lmja"></div><div class="le" id="lmen"></div></div>
+  <div class="bar" style="gap:6px"><button id="lmprev" class="sp" style="flex:1;padding:14px">⏮ 前へ</button><button id="lmrep" class="sp" style="flex:1;padding:14px">🔁 もう一度</button><button id="lmnext" class="sp" style="flex:1;padding:14px">次へ ⏭</button></div>
   <button id="lmplay">▶ 再生（止めるまで流れ続けます）</button>
   <div class="bar">音声ファイル再生なので、画面ロック・他アプリ使用中も流れます。</div>
 </div>
@@ -232,15 +234,19 @@ function pGrade(ok){
 $("p-ok").onclick=()=>pGrade(true);$("p-ng").onclick=()=>pGrade(false);
 
 /* ---- 聞き流し: 音声ファイルを止めるまでループ ---- */
-let PL=null,lmAudio=new Audio(),wake=null,lmOn=false;lmAudio.loop=true;
-fetch("audio/playlists.json").then(r=>r.json()).then(j=>{PL=j;$("lmsel").innerHTML=Object.keys(j).map(k=>`<option>${k}</option>`).join("")}).catch(()=>{});
+let PL={},lmAudio=new Audio(),wake=null,lmOn=false,lmK=0;lmAudio.loop=true;
+fetch("audio/playlists.json").then(r=>r.json()).then(j=>{
+  $("lmsel").innerHTML=j.map(g=>`<optgroup label="${g.group}">`+g.lists.map(l=>{PL[l.name]=l;return `<option>${l.name}</option>`}).join("")+`</optgroup>`).join("");
+}).catch(()=>{});
 lmAudio.ontimeupdate=()=>{
-  const m=PL&&PL[$("lmsel").value];if(!m)return;let k=0;
+  const m=PL[$("lmsel").value];if(!m)return;let k=0;
   while(k+1<m.starts.length&&m.starts[k+1]<=lmAudio.currentTime)k++;
-  $("lmcnt").textContent=(k+1)+" / "+m.starts.length;$("lmja").textContent=m.ja[k];$("lmen").textContent=m.en[k];
+  lmK=k;$("lmcnt").textContent=(k+1)+" / "+m.starts.length;$("lmja").textContent=m.ja[k];$("lmen").textContent=m.en[k];
 };
+function lmSeek(k){const m=PL[$("lmsel").value];if(!m)return;k=(k+m.starts.length)%m.starts.length;if(lmAudio.src)lmAudio.currentTime=m.starts[k]+0.05}
+$("lmprev").onclick=()=>lmSeek(lmK-1);$("lmnext").onclick=()=>lmSeek(lmK+1);$("lmrep").onclick=()=>lmSeek(lmK);
 async function lmStart(){
-  const m=PL&&PL[$("lmsel").value];if(!m)return;
+  const m=PL[$("lmsel").value];if(!m)return;
   lmOn=true;$("lmplay").textContent="■ 停止";$("lmplay").classList.add("on");
   try{if(navigator.wakeLock)wake=await navigator.wakeLock.request("screen")}catch(_){}
   if("mediaSession"in navigator){
