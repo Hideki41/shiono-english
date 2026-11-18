@@ -46,7 +46,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   <button id="t-listen">👂 リスニング</button>
   <button id="t-speak">🗣 スピーキング</button>
   <button id="t-lm">🎧 聞き流し</button>
-  <button id="t-work" onclick="location.href='../'">💼 普段の業務</button>
+  <button id="t-work">💼 業務</button>
 </nav>
 <div class="bar" id="bar"></div>
 
@@ -86,6 +86,12 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
   </div>
 </section>
 
+<section id="s-work" class="hide" style="flex:1;display:flex;flex-direction:column">
+  <div class="bar"><select id="wsel"></select><span id="wcnt"></span></div>
+  <div class="card" id="wcard"><div class="big" id="wja" style="font-size:30px"></div><div class="en" id="wen" style="font-size:30px"></div></div>
+  <div class="row"><button class="sp" id="wplay" style="flex:0 0 30%">🔊 もう一度</button><button class="pr" id="wnext" style="padding:22px;font-size:22px">英語を見る</button></div>
+</section>
+
 <footer>ステートメントは資料にある事実のみ。価格・規定は社内で確認のうえ使うこと</footer>
 <div id="lm" class="hide">
   <div class="bar"><button class="sp" id="lmclose" style="font-size:14px;padding:8px 12px;border-radius:8px">← 戻る</button>
@@ -97,6 +103,7 @@ footer{text-align:center;color:#6b7280;font-size:12px;padding:10px 0}
 </div>
 <script src="data.js"></script>
 <script src="answers.js"></script>
+<script src="work.js"></script>
 <script>
 const $=id=>document.getElementById(id);
 const KEY="shionoService_v1";
@@ -116,10 +123,10 @@ const bar=$("bar");
 let tab="read";
 function setTab(t){
   tab=t;speechSynthesis&&speechSynthesis.cancel();
-  ["read","listen","speak"].forEach(k=>{$("t-"+k).classList.toggle("on",k===t);$("s-"+k).classList.toggle("hide",k!==t)});
-  if(t==="read")initRead();else if(t==="listen")initListen();else initSpeak();
+  ["read","listen","speak","work"].forEach(k=>{$("t-"+k).classList.toggle("on",k===t);$("s-"+k).classList.toggle("hide",k!==t)});
+  if(t==="read")initRead();else if(t==="listen")initListen();else if(t==="work")initWork();else initSpeak();
 }
-["read","listen","speak"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
+["read","listen","speak","work"].forEach(k=>$("t-"+k).onclick=()=>setTab(k));
 
 /* ---- 作家(読む・音読) ---- */
 let art=ARTISTS[0],ri=-1,rrec=null;
@@ -232,6 +239,26 @@ function pGrade(ok){
   st.plog=st.plog||{};st.plog[day()]=(st.plog[day()]||0)+1;save();pNext();
 }
 $("p-ok").onclick=()=>pGrade(true);$("p-ng").onclick=()=>pGrade(false);
+
+
+/* ---- 普段の業務(1文ずつ) ---- */
+let wi=null,wst=0,wq=[];
+function initWork(){
+  if(!$("wsel").options.length)["すべて",...new Set(WORK.map(c=>c[0]))].forEach(c=>$("wsel").add(new Option(c,c)));
+  wBuild();
+}
+function wBuild(){const c=$("wsel").value;wq=WORK.filter(x=>c==="すべて"||x[0]===c).sort(()=>Math.random()-.5);wNext()}
+function wNext(){
+  if(!wq.length)wBuild();wi=wq.shift();wst=0;
+  $("wja").textContent=wi[2];$("wen").textContent="";$("wcnt").textContent="残り "+wq.length;
+  $("wnext").textContent="英語を見る";$("wplay").classList.add("hide");
+}
+function wStep(){
+  if(wst===0){wst=1;$("wen").textContent=wi[1];$("wnext").textContent="次へ ▶";$("wplay").classList.remove("hide");say(wi[1],.9)}
+  else wNext();
+}
+$("wnext").onclick=wStep;$("wcard").onclick=wStep;
+$("wplay").onclick=()=>say(wi[1],.9);$("wsel").onchange=wBuild;
 
 /* ---- 聞き流し: 音声ファイルを止めるまでループ ---- */
 let PL={},lmAudio=new Audio(),wake=null,lmOn=false,lmK=0;lmAudio.loop=true;
